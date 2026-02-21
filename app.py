@@ -16,7 +16,7 @@ from src.brain_data import (
 )
 
 st.set_page_config(
-    page_title="Neuro-Canvas",
+    page_title="Voxelith",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -136,8 +136,8 @@ def main() -> None:
     st.markdown(
         """
         <div style="padding: 1rem 0; margin-bottom: 1.5rem; text-align: center;">
-            <h1 style="font-family: 'Playfair Display', serif; font-size: 4rem; font-weight: 300; color: #ffffff; margin: 0;">Neuro-Canvas</h1>
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #888; margin: 0.5rem 0 0 0; letter-spacing: 2px; text-transform: lowercase;">Interactive voxel analysis & 3D anatomical engine</p>
+            <h1 style="font-family: 'Playfair Display', serif; font-size: 4rem; font-weight: 300; color: #ffffff; margin: 0; letter-spacing: 5px;">Voxelith</h1>
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #888; margin: 0.5rem 0 0 0; letter-spacing: 2px; text-transform: lowercase;">Volumetric Anatomical Matrix & Spatial Intelligence Engine</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -178,6 +178,8 @@ def main() -> None:
             )
 
         total_volume_mm3 = 0.0
+        total_voxel_count = 0
+        effective_resolution_um = None
         if selected_regions:
             for region in selected_regions:
                 region_mesh = get_cached_region_mesh(region)
@@ -186,10 +188,20 @@ def main() -> None:
                     x_length = region_mesh.bounds[1] - region_mesh.bounds[0]
                     voxel_size = x_length / 30.0
                     vox = region_mesh.voxelize(spacing=voxel_size)
+                    total_voxel_count += vox.n_cells
+                    if effective_resolution_um is None:
+                        effective_resolution_um = voxel_size
                     vol_um3 = vox.n_cells * (voxel_size ** 3)
                 total_volume_mm3 += vol_um3 / 1e9
         if lesion_mode and selected_regions:
             st.metric("Estimated Lesion Volume", f"{total_volume_mm3:.2f} mm³")
+        if use_voxels and selected_regions:
+            st.divider()
+            st.subheader("Voxel metrics")
+            st.metric("Voxel Count", f"{total_voxel_count:,}")
+            if effective_resolution_um is not None:
+                st.metric("Effective Resolution", f"{effective_resolution_um:.1f} µm")
+            st.metric("Total Volume", f"{total_volume_mm3:.2f} mm³")
 
     fig = go.Figure()
 
