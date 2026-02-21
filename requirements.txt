@@ -1,0 +1,6 @@
+streamlit==1.28.1
+pyvista==0.43.0
+brainrender==2.0.4.7
+trimesh==3.24.0
+pandas==2.1.3
+numpy==1.24.3
