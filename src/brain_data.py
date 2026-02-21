@@ -81,3 +81,17 @@ def load_region_mesh(region_name: str, atlas_name: str = "allen_mouse_100um") ->
             return pv.read(mesh_path)
     raise ValueError(f"No atlas structure with acronym '{region_name}'.")
 
+
+def get_region_full_name(region_acronym: str, atlas_name: str = "allen_mouse_100um") -> str:
+    """
+    Return the full display name for a region acronym.
+
+    Iterates atlas.structures.values() to find the structure with matching acronym,
+    then returns structure['name']. Falls back to the acronym if not found.
+    """
+    atlas = BrainGlobeAtlas(atlas_name)
+    for structure in atlas.structures.values():
+        if structure.get("acronym") == region_acronym:
+            return structure.get("name", region_acronym)
+    return region_acronym
+
