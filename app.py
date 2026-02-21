@@ -15,7 +15,74 @@ from src.brain_data import (
     load_root_brain_mesh,
 )
 
-HIGHLIGHT_COLORS = ["blue", "crimson", "mediumseagreen"]
+st.set_page_config(
+    page_title="Neuro-Canvas",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;600&display=swap');
+
+    h1, h2, h3, h4 {
+        font-family: 'Playfair Display', serif !important;
+        font-weight: 300 !important;
+    }
+
+    html, body, [class*='css'] {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.85rem;
+    }
+
+    [data-testid="stSidebar"], [class*='stSelectbox'], [class*='stMultiSelect'],
+    [class*='stCheckbox'], [class*='stToggle'], button, input, [class*='stTextInput'] {
+        border-radius: 0px !important;
+    }
+
+    [class*='stSelectbox'] > div, [class*='stMultiSelect'] > div,
+    input, [data-baseweb="input"] {
+        border-color: #222222 !important;
+    }
+
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+    header { visibility: hidden; }
+
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 0rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    span[data-baseweb='tag'] {
+        background-color: #ffffff !important;
+        border: 1px solid #ffffff !important;
+        border-radius: 0px !important;
+    }
+    span[data-baseweb='tag'] span {
+        color: #000000 !important;
+    }
+    div[role='listbox'] {
+        background-color: #111111 !important;
+        color: #ffffff !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+HIGHLIGHT_COLORS = [
+    "#00FFFF",   # Cyan
+    "#FF00FF",   # Magenta
+    "#7DF9FF",   # Light Teal
+    "#B026FF",   # Neon Purple
+    "#FF007F",   # Hot Pink
+    "#00FF9D",   # Neon Green
+]
 
 
 @st.cache_data
@@ -66,13 +133,19 @@ def extract_plotly_data(mesh: pv.PolyData) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Neuro-Model: Glass Brain", layout="wide")
-
-    st.title("Neuro-Model")
-    st.subheader("Glass brain 3D view")
+    st.markdown(
+        """
+        <div style="padding: 1rem 0; margin-bottom: 1.5rem; text-align: center;">
+            <h1 style="font-family: 'Playfair Display', serif; font-size: 4rem; font-weight: 300; color: #ffffff; margin: 0;">Neuro-Canvas</h1>
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #888; margin: 0.5rem 0 0 0; letter-spacing: 2px; text-transform: lowercase;">Interactive voxel analysis & 3D anatomical engine</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     with st.sidebar:
-        st.header("Controls")
+        st.title("Control Panel")
+        st.divider()
         if "region_acronyms" not in st.session_state:
             with st.spinner("Loading atlas..."):
                 try:
@@ -87,8 +160,36 @@ def main() -> None:
             default=[],
             help="Select regions to highlight on the glass brain.",
         )
+        st.subheader("2. Render Engine")
         show_glass_brain = st.toggle("Show Glass Brain Context", value=True)
         use_voxels = st.toggle("Enable Voxel Data View", value=False)
+
+        st.subheader("3. Research & Clinical Mode")
+        lesion_mode = st.toggle("Simulate Pathological Lesion", value=False)
+        lesion_severity = 0.5
+        if lesion_mode:
+            lesion_severity = st.slider(
+                "Lesion Severity",
+                min_value=0.1,
+                max_value=1.0,
+                value=0.5,
+                step=0.1,
+                help="0.1 = Blood Red, 1.0 = Necrotic Black",
+            )
+
+        total_volume_mm3 = 0.0
+        if selected_regions:
+            for region in selected_regions:
+                region_mesh = get_cached_region_mesh(region)
+                vol_um3 = region_mesh.volume
+                if use_voxels:
+                    x_length = region_mesh.bounds[1] - region_mesh.bounds[0]
+                    voxel_size = x_length / 30.0
+                    vox = region_mesh.voxelize(spacing=voxel_size)
+                    vol_um3 = vox.n_cells * (voxel_size ** 3)
+                total_volume_mm3 += vol_um3 / 1e9
+        if lesion_mode and selected_regions:
+            st.metric("Estimated Lesion Volume", f"{total_volume_mm3:.2f} mm³")
 
     fig = go.Figure()
 
@@ -134,7 +235,14 @@ def main() -> None:
             verts, faces = extract_plotly_data(mesh)
             full_name = get_cached_region_name(region)
             wrapped_name = "<br>".join(textwrap.wrap(full_name, width=30))
-            color = HIGHLIGHT_COLORS[i % len(HIGHLIGHT_COLORS)]
+            if lesion_mode:
+                t = (lesion_severity - 0.1) / 0.9
+                r = int(139 + (26 - 139) * t)
+                g = int(0 + (26 - 0) * t)
+                b = int(0 + (26 - 0) * t)
+                color = f"rgb({r},{g},{b})"
+            else:
+                color = HIGHLIGHT_COLORS[i % len(HIGHLIGHT_COLORS)]
             fig.add_trace(
                 go.Mesh3d(
                     x=verts[:, 0],
@@ -144,10 +252,17 @@ def main() -> None:
                     j=faces[:, 1],
                     k=faces[:, 2],
                     color=color,
-                    opacity=1.0,
+                    opacity=0.85,
                     name=full_name,
                     hovertext=wrapped_name,
                     hoverinfo="text",
+                    lighting=dict(
+                        ambient=0.6,
+                        diffuse=0.5,
+                        roughness=0.1,
+                        specular=0.8,
+                        fresnel=0.5,
+                    ),
                 )
             )
         except Exception as exc:
