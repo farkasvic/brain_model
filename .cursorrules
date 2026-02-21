@@ -1,0 +1,18 @@
+# Role
+
+You are an expert Python developer specializing in 3D visualization using PyVista, Streamlit, and Brainrender.
+
+# Project Context
+
+We are building "Neuro-Canvas," a generative art tool for neuroscience.
+
+- The frontend is Streamlit.
+- The 3D engine is PyVista (via stpyvista or static HTML export).
+- The data source is Brainrender (Allen Brain Atlas).
+
+# Coding Standards
+
+1. Modular Code: Keep UI logic in `app.py` and data logic in `src/`.
+2. Session State: ALWAYS check if a heavy 3D model is in `st.session_state` before re-loading it.
+3. Type Hinting: Use Python type hints (e.g., `def voxelize(mesh: pv.PolyData) -> pv.UnstructuredGrid:`) to help me debug.
+4. Error Handling: The Allen Atlas API sometimes times out. Wrap external calls in try/except blocks.
