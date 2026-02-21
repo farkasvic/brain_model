@@ -55,23 +55,29 @@ def load_root_brain_mesh(atlas_name="allen_mouse_100um"):
 
 def load_region_mesh(region_name: str, atlas_name: str = "allen_mouse_100um") -> pv.PolyData:
     """
-    Load a brain region mesh by name using the atlas (BrainGlobe/Brainrender data).
+    Load a brain region mesh by acronym using the atlas (BrainGlobe/Brainrender data).
 
     Parameters
     ----------
     region_name : str
-        Atlas structure acronym (e.g. 'CA1', 'TH', 'CTX').
+        Atlas structure acronym (e.g. 'CA1', 'MY-mot').
     atlas_name : str, optional
         Atlas identifier. Default 'allen_mouse_100um'.
 
     Returns
     -------
     pyvista.PolyData
-        Merged mesh for the region (may include multiple subregions).
+        Mesh for the region.
+
+    Raises
+    ------
+    ValueError
+        If no structure has the given acronym.
     """
     atlas = BrainGlobeAtlas(atlas_name)
-    if region_name not in atlas.structures:
-        raise ValueError(f"Unknown region '{region_name}'. Check atlas structure names.")
-    mesh_path = atlas.structures[region_name]["mesh_filename"]
-    return pv.read(mesh_path)
+    for structure in atlas.structures.values():
+        if structure["acronym"] == region_name:
+            mesh_path = structure["mesh_filename"]
+            return pv.read(mesh_path)
+    raise ValueError(f"No atlas structure with acronym '{region_name}'.")
 
