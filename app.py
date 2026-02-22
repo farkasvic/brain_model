@@ -75,6 +75,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+PATHOLOGY_MAP = {
+    "None": [],
+    "Ischemic Stroke (MCA)": ["STR", "MOs", "SSp"],
+    "Glioblastoma (Butterfly)": ["CC", "MOs", "SSp"],
+    "Thalamic Hemorrhage": ["TH"],
+}
+PATHOLOGY_COLORS = {
+    "Ischemic Stroke (MCA)": "#4B0082",
+    "Thalamic Hemorrhage": "#4B0082",
+    "Glioblastoma (Butterfly)": "#FF4500",
+}
+
 HIGHLIGHT_COLORS = [
     "#00FFFF",   # Cyan
     "#FF00FF",   # Magenta
@@ -163,8 +175,18 @@ def main() -> None:
         st.subheader("2. Render Engine")
         show_glass_brain = st.toggle("Show Glass Brain Context", value=True)
         use_voxels = st.toggle("Enable Voxel Data View", value=False)
+        use_heatmap = st.toggle("Enable Density Heatmap", value=False)
 
         st.subheader("3. Research & Clinical Mode")
+        pathology_preset = st.selectbox(
+            "Simulate Clinical Pathology",
+            options=list(PATHOLOGY_MAP.keys()),
+            help="Add preset regions for common pathologies.",
+        )
+        pathology_acronyms = PATHOLOGY_MAP.get(pathology_preset, [])
+        regions_to_render = list(
+            dict.fromkeys(selected_regions + [a for a in pathology_acronyms if a in region_options])
+        )
         lesion_mode = st.toggle("Simulate Pathological Lesion", value=False)
         lesion_severity = 0.5
         if lesion_mode:
@@ -178,10 +200,11 @@ def main() -> None:
             )
 
         total_volume_mm3 = 0.0
+        total_pathological_volume_mm3 = 0.0
         total_voxel_count = 0
         effective_resolution_um = None
-        if selected_regions:
-            for region in selected_regions:
+        if regions_to_render:
+            for region in regions_to_render:
                 region_mesh = get_cached_region_mesh(region)
                 vol_um3 = region_mesh.volume
                 if use_voxels:
@@ -193,9 +216,13 @@ def main() -> None:
                         effective_resolution_um = voxel_size
                     vol_um3 = vox.n_cells * (voxel_size ** 3)
                 total_volume_mm3 += vol_um3 / 1e9
-        if lesion_mode and selected_regions:
+                if pathology_preset != "None" and region in pathology_acronyms:
+                    total_pathological_volume_mm3 += vol_um3 / 1e9
+        if lesion_mode and regions_to_render:
             st.metric("Estimated Lesion Volume", f"{total_volume_mm3:.2f} mm³")
-        if use_voxels and selected_regions:
+        if pathology_preset != "None" and pathology_acronyms:
+            st.metric("Total Pathological Volume", f"{total_pathological_volume_mm3:.2f} mm³")
+        if use_voxels and regions_to_render:
             st.divider()
             st.subheader("Voxel metrics")
             st.metric("Voxel Count", f"{total_voxel_count:,}")
@@ -238,8 +265,8 @@ def main() -> None:
                 st.error(f"Failed to load whole brain: {exc}")
                 st.stop()
 
-    # Highlights: selected regions (full name in legend and hover via name + hoverinfo='name')
-    for i, region in enumerate(selected_regions):
+    # Highlights: selected regions + pathology preset
+    for i, region in enumerate(regions_to_render):
         try:
             mesh = get_cached_region_mesh(region)
             if use_voxels:
@@ -247,16 +274,47 @@ def main() -> None:
             verts, faces = extract_plotly_data(mesh)
             full_name = get_cached_region_name(region)
             wrapped_name = "<br>".join(textwrap.wrap(full_name, width=30))
-            if lesion_mode:
-                t = (lesion_severity - 0.1) / 0.9
-                r = int(139 + (26 - 139) * t)
-                g = int(0 + (26 - 0) * t)
-                b = int(0 + (26 - 0) * t)
-                color = f"rgb({r},{g},{b})"
+            if use_heatmap:
+                center = np.array(mesh.center)
+                distances = np.linalg.norm(verts - center, axis=1)
+                d_max = distances.max()
+                intensity = (1.0 - (distances / d_max)) if d_max > 0 else np.ones_like(distances)
+                mesh_trace = go.Mesh3d(
+                    x=verts[:, 0],
+                    y=verts[:, 1],
+                    z=verts[:, 2],
+                    i=faces[:, 0],
+                    j=faces[:, 1],
+                    k=faces[:, 2],
+                    intensity=intensity,
+                    colorscale="Viridis",
+                    showscale=True,
+                    opacity=0.85,
+                    name=full_name,
+                    hovertext=wrapped_name,
+                    hoverinfo="text",
+                    lighting=dict(
+                        ambient=0.6,
+                        diffuse=0.5,
+                        roughness=0.1,
+                        specular=0.8,
+                        fresnel=0.5,
+                    ),
+                )
             else:
-                color = HIGHLIGHT_COLORS[i % len(HIGHLIGHT_COLORS)]
-            fig.add_trace(
-                go.Mesh3d(
+                if pathology_preset != "None" and region in pathology_acronyms:
+                    color = PATHOLOGY_COLORS.get(
+                        pathology_preset, HIGHLIGHT_COLORS[i % len(HIGHLIGHT_COLORS)]
+                    )
+                elif lesion_mode:
+                    t = (lesion_severity - 0.1) / 0.9
+                    r = int(139 + (26 - 139) * t)
+                    g = int(0 + (26 - 0) * t)
+                    b_val = int(0 + (26 - 0) * t)
+                    color = f"rgb({r},{g},{b_val})"
+                else:
+                    color = HIGHLIGHT_COLORS[i % len(HIGHLIGHT_COLORS)]
+                mesh_trace = go.Mesh3d(
                     x=verts[:, 0],
                     y=verts[:, 1],
                     z=verts[:, 2],
@@ -276,7 +334,7 @@ def main() -> None:
                         fresnel=0.5,
                     ),
                 )
-            )
+            fig.add_trace(mesh_trace)
         except Exception as exc:
             st.error(f"Error loading {region}: {exc}")
 
