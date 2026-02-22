@@ -201,6 +201,7 @@ def main() -> None:
 
         total_volume_mm3 = 0.0
         total_pathological_volume_mm3 = 0.0
+        total_lesion_volume_mm3 = 0.0
         total_voxel_count = 0
         effective_resolution_um = None
         if regions_to_render:
@@ -218,8 +219,14 @@ def main() -> None:
                 total_volume_mm3 += vol_um3 / 1e9
                 if pathology_preset != "None" and region in pathology_acronyms:
                     total_pathological_volume_mm3 += vol_um3 / 1e9
+                is_lesion_rendered = (
+                    not use_heatmap
+                    and (pathology_preset == "None" or region not in pathology_acronyms)
+                )
+                if lesion_mode and is_lesion_rendered:
+                    total_lesion_volume_mm3 += vol_um3 / 1e9
         if lesion_mode and regions_to_render:
-            st.metric("Estimated Lesion Volume", f"{total_volume_mm3:.2f} mm³")
+            st.metric("Estimated Lesion Volume", f"{total_lesion_volume_mm3:.2f} mm³")
         if pathology_preset != "None" and pathology_acronyms:
             st.metric("Total Pathological Volume", f"{total_pathological_volume_mm3:.2f} mm³")
         if use_voxels and regions_to_render:
